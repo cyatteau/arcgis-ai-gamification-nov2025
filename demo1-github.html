@@ -4,16 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Question Map</title>
+    <style>
+      html,
+      body,
+      arcgis-map {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, Helvetica, Arial, sans-serif;
+      }
+    </style>
     <script>
       var esriConfig = {
-        apiKey:
-          "YOUR_API_KEY"
-      };
+        apiKey: 'YOUR_API_KEY'
+      }
     </script>
 
     <script>
-      const OPENAI_API_KEY =
-        "YOUR_API_KEY";
+      const OPENAI_API_KEY = 'YOUR_API_KEY'
     </script>
     <script
       type="module"
@@ -26,50 +36,47 @@
     ></script>
   </head>
   <body>
-    <arcgis-map
-      basemap="arcgis/topographic"
-      center="-79.38, 43.65"
-      zoom="13"
-    >
+    <arcgis-map basemap="arcgis/topographic" center="-79.38, 43.65" zoom="13">
       <arcgis-popup slot="popup"></arcgis-popup>
     </arcgis-map>
 
     <script>
-      const arcgisMap = document.querySelector("arcgis-map");
-      const popup = document.querySelector("arcgis-popup");
+      const arcgisMap = document.querySelector('arcgis-map')
+      const popup = document.querySelector('arcgis-popup')
 
-      arcgisMap.addEventListener("arcgisViewClick", async (e) => {
-        const mapPt = e.detail.mapPoint;
-        console.log("Clicked at", mapPt.longitude, mapPt.latitude);
+      arcgisMap.addEventListener('arcgisViewClick', async e => {
+        const mapPt = e.detail.mapPoint
+        console.log('Clicked at', mapPt.longitude, mapPt.latitude)
 
-        const prompt = `You are helping someone explore an area. Location: longitude: ${mapPt.longitude}, latitude: ${mapPt.latitude}. Write one short spooky question about this place and a short answer.` 
+        const prompt = `You are helping someone explore an area. Location: longitude: ${mapPt.longitude}, latitude: ${mapPt.latitude}. Write one short spooky question about this place and a short answer.`
 
-        const response = await fetch("https://api.openai.com/v1/chat/completions",
+        const response = await fetch(
+          'https://api.openai.com/v1/chat/completions',
           {
-            method: "POST",
+            method: 'POST',
             headers: {
-              "Content-Type": "application/json",
+              'Content-Type': 'application/json',
               Authorization: `Bearer ${OPENAI_API_KEY}`
             },
             body: JSON.stringify({
-              model: "gpt-4o-mini",
-              messages: [{ role: "user", content: prompt }],
+              model: 'gpt-4o-mini',
+              messages: [{ role: 'user', content: prompt }],
               temperature: 0.6
             })
           }
-        );
+        )
 
-        const data = await response.json();
-        console.log("Raw OpenAI response:", data);
+        const data = await response.json()
+        console.log('Raw OpenAI response:', data)
 
-        const content = data.choices?.[0]?.message?.content;
+        const content = data.choices?.[0]?.message?.content
 
         popup.open({
           location: mapPt,
-          heading: "AI-generated question + answer",
+          heading: 'AI-generated question + answer',
           content
-        });
-      });
+        })
+      })
     </script>
   </body>
 </html>
