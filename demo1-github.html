@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>GeoExplorer: Quizzes, Sentiment, and More</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      window.esriConfig = {
+        apiKey: 'yourKEY'
+      }
+    </script>
+    <script
+      type="module"
+      src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/calcite-components/3.2.1/calcite.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.33/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.33/"></script>
+    <script
+      type="module"
+      src="https://js.arcgis.com/4.33/map-components/"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <style>
+      #loader {
+        position: fixed;
+        inset: 0;
+        display: none;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.6);
+        z-index: 9999;
+      }
+      .suggest-note {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 12px;
+      }
+      .badge-chip {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        border-radius: 9999px;
+        padding: 4px 8px;
+        margin: 2px 4px;
+        font: 12px/1.2 system-ui;
+      }
+      .badge-chip.locked {
+        opacity: 0.5;
+      }
+      .choice {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin: 4px 0;
+        padding: 6px 8px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+      }
+      .choice.correct {
+        border-color: #16a34a;
+        box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2) inset;
+      }
+      .choice.wrong {
+        border-color: #dc2626;
+        box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) inset;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 9999px;
+        margin-left: 6px;
+        font-size: 12px;
+      }
+      .pill.fast {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .pill.slow {
+        background: #fee2e2;
+        color: #7f1d1d;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      calcite-shell,
+      calcite-shell-panel {
+        height: 100%;
+      }
+      arcgis-map {
+        display: block;
+        height: 100%;
+        width: 100%;
+      }
+      .panel-content {
+        padding: 10px;
+        display: grid;
+        gap: 10px;
+        font-family: ui-sans-serif, system-ui;
+      }
+      .statrow {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .stat {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 8px 10px;
+        min-width: 110px;
+      }
+      .stat .k {
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .stat .v {
+        font-weight: 800;
+        font-size: 14px;
+      }
+      .badge-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .unlock-list {
+        display: grid;
+        gap: 6px;
+      }
+      .unlock {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 8px;
+        background: #fafafa;
+      }
+      .unlock.locked {
+        opacity: 0.65;
+        background: #f9fafb;
+      }
+      .unlock .name {
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .unlock .why {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 2px;
+      }
+      .unlock .req {
+        font-size: 12px;
+        color: #374151;
+        margin-top: 4px;
+      }
+      .unlock .row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .unlock input[type='radio'] {
+        margin-top: 2px;
+      }
+      .btn {
+        background: var(--calcite-color-brand);
+        color: #fff;
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+      .btn.ghost {
+        background: #e5e7eb;
+        color: #111827;
+      }
+      .quiz {
+        font-family: ui-sans-serif, system-ui;
+        padding: 10px;
+        line-height: 1.25;
+        font-size: 0.9rem;
+      }
+      .quiz .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      .quiz .badge {
+        background: #eef2ff;
+        color: #3730a3;
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .quiz .title {
+        margin: 0;
+        font-size: 0.98rem;
+        font-weight: 800;
+      }
+      .quiz .subtitle {
+        margin: 2px 0 8px;
+        color: #6b7280;
+        font-size: 0.82rem;
+      }
+      .quiz .choices {
+        display: grid;
+        gap: 6px;
+      }
+      .quiz .choice {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        border-radius: 9px;
+        padding: 7px 9px;
+        font-size: 0.88rem;
+      }
+      .quiz .choice:hover {
+        border-color: #c7cdd8;
+        background: #fafafa;
+      }
+      .quiz .choice input {
+        accent-color: var(--calcite-color-brand);
+      }
+      .quiz .choice.correct {
+        border-color: #16a34a;
+        background: #ecfdf5;
+      }
+      .quiz .choice.wrong {
+        border-color: #dc2626;
+        background: #fef2f2;
+      }
+      .quiz .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8px;
+      }
+      .quiz .status {
+        font-size: 0.82rem;
+        color: #374151;
+      }
+      .quiz .explain {
+        margin-top: 6px;
+        font-size: 0.82rem;
+        color: #4b5563;
+      }
+      .feel {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px dashed #e5e7eb;
+      }
+      .feel .row {
+        display: flex;
+        gap: 6px;
+      }
+      .feel input {
+        flex: 1;
+        padding: 7px 9px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 0.85rem;
+      }
+      #toaster {
+        position: fixed;
+        right: 14px;
+        bottom: 14px;
+        display: grid;
+        gap: 8px;
+        z-index: 1000;
+      }
+    </style>
+  </head>
+  <body>
+    <calcite-shell>
+      <calcite-shell-panel
+        id="leftPanel"
+        slot="panel-start"
+        position="start"
+        width="l"
+      >
+        <calcite-action-bar slot="action-bar" expand-disabled>
+          <calcite-action
+            id="toggle-panel"
+            text="Hide panel"
+            icon="chevrons-left"
+          ></calcite-action>
+        </calcite-action-bar>
+        <calcite-panel heading="Dashboard and Controls">
+          <div class="panel-content">
+            <calcite-label layout="inline-space-between">
+              Quiz mode
+              <calcite-switch id="quizToggle" checked></calcite-switch>
+            </calcite-label>
+            <calcite-label layout="inline-space-between">
+              Sentiment mode
+              <calcite-switch id="sentimentToggle"></calcite-switch>
+            </calcite-label>
+            <div class="statrow">
+              <div class="stat">
+                <div class="k">Difficulty</div>
+                <div class="v" id="dashDiff">Easy</div>
+              </div>
+              <div class="stat">
+                <div class="k">Attempts</div>
+                <div class="v" id="dashAttempts">0</div>
+              </div>
+              <div class="stat">
+                <div class="k">Accuracy</div>
+                <div class="v" id="dashAccuracy">0%</div>
+              </div>
+              <div class="stat">
+                <div class="k">Avg time</div>
+                <div class="v" id="dashAvg">0.0s</div>
+              </div>
+              <div class="stat">
+                <div class="k">Streak</div>
+                <div class="v" id="dashStreak">0</div>
+              </div>
+              <div class="stat">
+                <div class="k">Abandoned</div>
+                <div class="v" id="dashAbandoned">0</div>
+              </div>
+            </div>
+            <div style="margin-top: 8px">
+              <div class="k" style="margin-bottom: 4px">Badges</div>
+              <div id="badgeList" class="badge-list"></div>
+            </div>
+            <div style="margin-top: 10px">
+              <div class="k" style="margin-bottom: 4px">Basemap Unlocks</div>
+              <div id="unlockList" class="unlock-list"></div>
+            </div>
+            <div style="margin-top: 10px">
+              <div
+                style="
+                  display: flex;
+                  gap: 8px;
+                  flex-wrap: wrap;
+                  margin-top: 6px;
+                "
+              >
+                <button class="btn ghost" id="vibeRecap">Mood recap</button>
+              </div>
+            </div>
+            <div
+              style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px"
+            >
+              <button class="btn" id="resetStats">
+                Reset stats and difficulty
+              </button>
+            </div>
+          </div>
+        </calcite-panel>
+      </calcite-shell-panel>
+
+      <calcite-navigation slot="header">
+        <calcite-navigation-logo
+          heading="GeoExplorer"
+        ></calcite-navigation-logo>
+        <div slot="content-center" style="font-weight: 800; font-size: 18px">
+          GeoExplorer: AI + Gamification
+        </div>
+        <calcite-navigation-user
+          slot="user"
+          full-name="Courtney"
+        ></calcite-navigation-user>
+      </calcite-navigation>
+
+      <div id="loader">
+        <calcite-loader active label="Loading"></calcite-loader>
+      </div>
+      <div id="toaster"></div>
+
+      <arcgis-map
+        id="map"
+        basemap="arcgis/topographic"
+        center="-122.335,47.61"
+        zoom="13"
+      >
+        <arcgis-zoom position="top-left"></arcgis-zoom>
+        <arcgis-search position="top-right"></arcgis-search>
+      </arcgis-map>
+    </calcite-shell>
+
+    <script type="module">
+      const [GraphicsLayer, Graphic, reactive] = await $arcgis.import([
+        '@arcgis/core/layers/GraphicsLayer.js',
+        '@arcgis/core/Graphic.js',
+        '@arcgis/core/core/reactiveUtils.js'
+      ])
+      const locator = await $arcgis.import('@arcgis/core/rest/locator.js')
+
+      const OPENAI_MODEL = 'gpt-4o'
+      const OPENAI_API_KEY = 'yourKey'
+      const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
+
+      const GEMINI_API_KEY = 'yourKey'
+      const GEMINI_MODEL = 'gemini-2.5-flash'
+
+      const GEOCODER_URL =
+        'https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer'
+      const AZURE_TEXT_REGION = 'eastus'
+      const AZURE_TEXT_KEY = 'yourKey'
+      const AZURE_TEXT_ENDPOINT = `https://${AZURE_TEXT_REGION}.api.cognitive.microsoft.com`
+
+      const loader = document.getElementById('loader')
+      const shellPanel = document.getElementById('leftPanel')
+      const toggleBtn = document.getElementById('toggle-panel')
+      const resetStatsBtn = document.getElementById('resetStats')
+      const unlockList = document.getElementById('unlockList')
+      const badgeList = document.getElementById('badgeList')
+      const toaster = document.getElementById('toaster')
+      const quizToggle = document.getElementById('quizToggle')
+      const sentimentToggle = document.getElementById('sentimentToggle')
+      const vibeRecapBtn = document.getElementById('vibeRecap')
+
+      const wgs84 = { wkid: 4326 }
+      const JSON_HDR = { 'Content-Type': 'application/json' }
+      const point = (lon, lat) => ({
+        type: 'point',
+        longitude: lon,
+        latitude: lat,
+        spatialReference: wgs84
+      })
+      const postJSON = (url, body, headers = {}, timeoutMs = 18000) => {
+        const ctrl = new AbortController()
+        const t = setTimeout(() => ctrl.abort(), timeoutMs)
+        return fetch(url, {
+          method: 'POST',
+          headers: { ...JSON_HDR, ...headers },
+          body: JSON.stringify(body),
+          signal: ctrl.signal
+        })
+          .then(r => {
+            if (!r.ok) throw new Error(`${r.status} @ ${url}`)
+            return r.json()
+          })
+          .finally(() => clearTimeout(t))
+      }
+
+      const store = (k, f) => ({
+        get: () => {
+          const v = localStorage.getItem(k)
+          return v ? JSON.parse(v) : f
+        },
+        set: v => localStorage.setItem(k, JSON.stringify(v))
+      })
+      const tidy = s => (s ? (s.split(',')[0] || s).trim() : '')
+      const emojiUrl = e => {
+        const hex = Array.from(e)
+          .map(ch => ch.codePointAt(0).toString(16))
+          .join('-')
+        return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${hex}.svg`
+      }
+
+      toggleBtn.addEventListener('click', () => {
+        shellPanel.collapsed = !shellPanel.collapsed
+        const c = shellPanel.collapsed
+        toggleBtn.icon = c ? 'chevrons-right' : 'chevrons-left'
+        toggleBtn.text = c ? 'Show panel' : 'Hide panel'
+      })
+
+      const QUIZ_MODE_KEY = 'quiz_mode_enabled_v1'
+      const SENT_MODE_KEY = 'sentiment_mode_enabled_v1'
+      const modeLS = store(QUIZ_MODE_KEY, true)
+      const sentLS = store(SENT_MODE_KEY, false)
+      quizToggle.checked = !!modeLS.get()
+      sentimentToggle.checked = !!sentLS.get()
+      if (quizToggle.checked && sentimentToggle.checked) {
+        sentimentToggle.checked = false
+        sentLS.set(false)
+      }
+      quizToggle.addEventListener('calciteSwitchChange', () => {
+        if (quizToggle.checked) {
+          sentimentToggle.checked = false
+          sentLS.set(false)
+        }
+        modeLS.set(quizToggle.checked)
+      })
+      sentimentToggle.addEventListener('calciteSwitchChange', () => {
+        if (sentimentToggle.checked) {
+          quizToggle.checked = false
+          modeLS.set(false)
+        }
+        sentLS.set(sentimentToggle.checked)
+      })
+      const quizOn = () => !!modeLS.get()
+      const sentimentOn = () => !!sentLS.get()
+
+      const dash = {
+        diff: document.getElementById('dashDiff'),
+        attempts: document.getElementById('dashAttempts'),
+        accuracy: document.getElementById('dashAccuracy'),
+        avg: document.getElementById('dashAvg'),
+        streak: document.getElementById('dashStreak'),
+        abandoned: document.getElementById('dashAbandoned')
+      }
+      let map, view, clicksGL, sentimentsGL
+
+      function marker(pt) {
+        clicksGL.removeAll()
+        clicksGL.add(
+          new Graphic({
+            geometry: {
+              type: 'point',
+              longitude: pt.longitude,
+              latitude: pt.latitude
+            },
+            symbol: {
+              type: 'simple-marker',
+              style: 'circle',
+              size: 9,
+              color: '#2f6fed',
+              outline: { color: '#fff', width: 1 }
+            }
+          })
+        )
+      }
+
+      const DIFF = [
+        { key: 'easy', name: 'Easy', deadline: 8 },
+        { key: 'medium', name: 'Medium', deadline: 10 },
+        { key: 'hard', name: 'Hard', deadline: 12 }
+      ]
+
+      const STORAGE_KEY = 'localstorage://geoexplorer-diff-v2'
+      const INPUT_SIZE = 3,
+        NUM_CLASSES = 3
+      let model,
+        currentIdx = 0
+
+      const oh = i => {
+        const a = new Array(NUM_CLASSES).fill(0)
+        a[i] = 1
+        return a
+      }
+      const normTime = (t, d) => Math.max(0, Math.min(1, t / Math.max(4, d)))
+      const normLevel = i => i / 2
+
+      function seedData() {
+        const S = [
+          [1, 2.0, 0, 1],
+          [1, 3.5, 0, 1],
+          [0, 6.0, 0, 0],
+          [1, 1.5, 1, 2],
+          [0, 4.0, 1, 0],
+          [1, 6.0, 1, 1],
+          [1, 3.0, 2, 2],
+          [0, 7.0, 2, 1],
+          [0, 9.0, 2, 0],
+          [1, 3.0, 1, 2]
+        ]
+        const xs = tf.tensor2d(
+          S.map(([c, t, l]) => [
+            c ? 1 : 0,
+            normTime(t, DIFF[l].deadline),
+            normLevel(l)
+          ])
+        )
+        const ys = tf.tensor2d(S.map(s => oh(s[3])))
+        return { xs, ys }
+      }
+      async function createModel() {
+        const m = tf.sequential()
+        m.add(
+          tf.layers.dense({
+            units: 8,
+            activation: 'relu',
+            inputShape: [INPUT_SIZE]
+          })
+        )
+        m.add(tf.layers.dense({ units: NUM_CLASSES, activation: 'softmax' }))
+        m.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy' })
+        return m
+      }
+      async function initModel() {
+        try {
+          model = await tf.loadLayersModel(STORAGE_KEY)
+          model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy' })
+          tf.tidy(() => model.predict(tf.zeros([1, INPUT_SIZE])))
+        } catch {
+          model = await createModel()
+          const { xs, ys } = seedData()
+          await model.fit(xs, ys, {
+            epochs: 80,
+            batchSize: 8,
+            shuffle: true,
+            verbose: 0
+          })
+          xs.dispose()
+          ys.dispose()
+          await model.save(STORAGE_KEY)
+        }
+      }
+      async function onlineTrain(ok, sec, idx) {
+        if (!model.optimizer)
+          model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy' })
+        const fast = sec <= DIFF[idx].deadline * 0.9
+        let t = idx
+        if (ok && fast) t = Math.max(t, Math.min(2, idx + 1))
+        else if (!ok || sec > DIFF[idx].deadline * 1.1)
+          t = Math.min(t, Math.max(0, idx - 1))
+        const x = tf.tensor2d([
+          [ok ? 1 : 0, normTime(sec, DIFF[idx].deadline), normLevel(idx)]
+        ])
+        const y = tf.tensor2d([oh(t)])
+        await model.fit(x, y, {
+          epochs: 8,
+          batchSize: 1,
+          shuffle: true,
+          verbose: 0
+        })
+        x.dispose()
+        y.dispose()
+        await model.save(STORAGE_KEY)
+        return t
+      }
+
+      const BADGES = [
+        { id: 'explorer', count: 5, emoji: '🗺', name: 'Explorer' },
+        { id: 'local-expert', count: 10, emoji: '⭐', name: 'Local Expert' },
+        { id: 'super-rater', count: 25, emoji: '🏆', name: 'Super Rater' },
+        { id: 'legend', count: 50, emoji: '👑', name: 'Legend' }
+      ]
+      const BADGES_KEY = 'badge_state_v1'
+      const badgeLS = store(BADGES_KEY, { ratedCount: 0, earned: [] })
+      const getBadgeState = () => badgeLS.get()
+      const saveBadgeState = s => badgeLS.set(s)
+      function incrementRatings() {
+        const st = getBadgeState()
+        st.ratedCount = (st.ratedCount || 0) + 1
+        saveBadgeState(st)
+        return st.ratedCount
+      }
+      function checkForBadge(count) {
+        const st = getBadgeState()
+        const already = new Set(st.earned || [])
+        const newly = BADGES.find(b => count === b.count && !already.has(b.id))
+        if (newly) {
+          st.earned = [...(st.earned || []), newly.id]
+          saveBadgeState(st)
+        }
+        return newly || null
+      }
+      function renderBadges() {
+        const st = getBadgeState(),
+          earned = new Set(st.earned || [])
+        badgeList.innerHTML = BADGES.map(b => {
+          const on = earned.has(b.id) || st.ratedCount >= b.count
+          const cls = on ? 'badge-chip' : 'badge-chip locked'
+          const sub = on ? b.name : `${b.name} · ${st.ratedCount}/${b.count}`
+          return `<div class="${cls}" title="${b.name}"><span class="emoji">${b.emoji}</span><span>${sub}</span></div>`
+        }).join('')
+      }
+      function resetBadges() {
+        saveBadgeState({ ratedCount: 0, earned: [] })
+        renderBadges()
+      }
+
+      const STAT_DEFAULTS = {
+        attempts: 0,
+        correct: 0,
+        avgSec: 0,
+        streak: 0,
+        abandoned: 0
+      }
+      const STATS_KEY = 'quiz_stats_v1'
+      const statsLS = store(STATS_KEY, { ...STAT_DEFAULTS })
+      const loadStats = () => statsLS.get(),
+        saveStats = s => statsLS.set(s)
+      function updateDash() {
+        const s = loadStats(),
+          acc = s.attempts ? Math.round((s.correct / s.attempts) * 100) : 0
+        dash.diff.textContent = DIFF[currentIdx].name
+        dash.attempts.textContent = s.attempts
+        dash.accuracy.textContent = `${acc}%`
+        dash.avg.textContent = `${(s.avgSec || 0).toFixed(1)}s`
+        dash.streak.textContent = s.streak
+        dash.abandoned.textContent = s.abandoned
+      }
+      function updateStats(ok, sec, ab = false) {
+        const s = loadStats()
+        s.attempts++
+        if (ok) s.correct++
+        s.streak = ok ? s.streak + 1 : 0
+        if (ab) s.abandoned++
+        const n = s.attempts
+        s.avgSec = n === 1 ? sec : ((s.avgSec || 0) * (n - 1) + sec) / n
+        saveStats(s)
+        updateDash()
+        return s
+      }
+
+      const CACHE_KEY = 'quiz_cache_v1',
+        CACHE_CAP = 60,
+        cacheLS = store(CACHE_KEY, {})
+      const keyFor = (lat, lon, d) => `${d}:${lat.toFixed(3)},${lon.toFixed(3)}`
+      const getCached = (lat, lon, d) =>
+        cacheLS.get()[keyFor(lat, lon, d)]?.q ?? null
+      const evictIfNeeded = c => {
+        const ks = Object.keys(c)
+        if (ks.length > CACHE_CAP)
+          ks.sort((a, b) => (c[a].ts || 0) - (c[b].ts || 0))
+            .slice(0, Math.max(10, Math.ceil(ks.length * 0.2)))
+            .forEach(k => delete c[k])
+      }
+      function setCached(lat, lon, d, q) {
+        const c = cacheLS.get()
+        c[keyFor(lat, lon, d)] = { q, ts: Date.now() }
+        evictIfNeeded(c)
+        cacheLS.set(c)
+      }
+      function clearQuestionCache() {
+        cacheLS.set({})
+      }
+
+      const UNLOCKS_KEY = 'basemap_unlocks_v1',
+        ACTIVE_BASEMAP_KEY = 'active_basemap_v1'
+      const unlockLS = store(UNLOCKS_KEY, { ids: ['arcgis/topographic'] })
+      const activeBM = store(ACTIVE_BASEMAP_KEY, null)
+      const BASEMAPS = [
+        {
+          id: 'arcgis/topographic',
+          name: 'Topographic',
+          req: 0,
+          why: 'Balanced reference for general exploration.'
+        },
+        {
+          id: 'arcgis/navigation',
+          name: 'Navigation',
+          req: 3,
+          why: 'High-contrast roads and POIs - great for wayfinding challenges.'
+        },
+        {
+          id: 'arcgis/human-geography',
+          name: 'Human Geography',
+          req: 6,
+          why: 'Emphasizes neighborhoods and civic context for urban questions.'
+        },
+        {
+          id: 'arcgis/outdoors',
+          name: 'Outdoors',
+          req: 9,
+          why: 'Trails and terrain - good for elevation or park questions.'
+        },
+        {
+          id: 'arcgis/dark-gray',
+          name: 'Dark Gray',
+          req: 12,
+          why: 'Minimal context - makes answers or layers pop in analysis mode.'
+        }
+      ]
+      function loadUnlocks() {
+        const u = unlockLS.get()
+        if (u && Array.isArray(u.ids)) return u
+        const seed = { ids: [BASEMAPS[0].id] }
+        unlockLS.set(seed)
+        return seed
+      }
+      const saveUnlocks = u => unlockLS.set(u),
+        isUnlocked = id => loadUnlocks().ids.includes(id),
+        setActiveBasemap = id => activeBM.set(id)
+      function getActiveBasemap() {
+        const s = activeBM.get()
+        if (s && isUnlocked(s)) return s
+        const u = loadUnlocks()
+        return (
+          BASEMAPS.filter(b => u.ids.includes(b.id)).at(-1)?.id ||
+          BASEMAPS[0].id
+        )
+      }
+      function applyBasemap(id) {
+        map.basemap = id
+        setActiveBasemap(id)
+      }
+      function resetUnlocks() {
+        unlockLS.set({ ids: [BASEMAPS[0].id] })
+        activeBM.set(null)
+        renderUnlocks()
+      }
+      const bmRow = (b, unlocked, active, correct) => {
+        const cls = unlocked ? 'unlock' : 'unlock locked'
+        const req =
+          b.req === 0
+            ? 'Unlocked by default'
+            : unlocked
+            ? 'Unlocked! 🎉'
+            : `Unlock at ${b.req} correct (${correct}/${b.req})`
+        const why = unlocked ? `<div class="why">${b.why}</div>` : ''
+        return `<div class="${cls}"><div class="row"><input type="radio" name="bm" value="${
+          b.id
+        }" ${unlocked ? '' : 'disabled'} ${
+          active === b.id ? 'checked' : ''
+        }/><div class="col"><div class="name">${b.name} ${
+          unlocked ? '' : '🔒'
+        }</div>${why}<div class="req">${req}</div></div></div></div>`
+      }
+      function renderUnlocks() {
+        const s = loadStats(),
+          u = loadUnlocks(),
+          a = getActiveBasemap()
+        unlockList.innerHTML = BASEMAPS.map(b =>
+          bmRow(b, u.ids.includes(b.id), a, s.correct || 0)
+        ).join('')
+        unlockList
+          .querySelectorAll('input[type="radio"][name="bm"]')
+          .forEach(r =>
+            r.addEventListener(
+              'change',
+              e => isUnlocked(e.target.value) && applyBasemap(e.target.value)
+            )
+          )
+      }
+      function toastUnlock(t, m) {
+        const n = document.createElement('calcite-notice')
+        Object.assign(n, {
+          kind: 'brand',
+          icon: 'key',
+          width: 'auto',
+          open: true
+        })
+        n.innerHTML = `<div slot="title">${t}</div><div slot="message">${m}</div>`
+        toaster.appendChild(n)
+        setTimeout(() => n.remove(), 6000)
+      }
+      function maybeUnlockBasemap(n) {
+        const u = loadUnlocks(),
+          newly = BASEMAPS.filter(
+            b => n >= b.req && !u.ids.includes(b.id)
+          ).sort((a, b) => a.req - b.req)
+        if (newly.length) {
+          newly.forEach(b => u.ids.push(b.id))
+          saveUnlocks(u)
+          const newest = newly.at(-1)
+          applyBasemap(newest.id)
+          toastUnlock(`New basemap unlocked: ${newest.name}`, newest.why)
+        }
+        renderUnlocks()
+      }
+
+      async function analyzeSentimentAzureRaw(text) {
+        const j = await postJSON(
+          `${AZURE_TEXT_ENDPOINT}/text/analytics/v3.0/sentiment`,
+          { documents: [{ id: '1', language: 'en', text }] },
+          { 'Ocp-Apim-Subscription-Key': AZURE_TEXT_KEY }
+        )
+        const d = j?.documents?.[0]
+        const label = d?.sentiment || 'neutral'
+        const c = d?.confidenceScores || {
+          positive: 0.34,
+          neutral: 0.33,
+          negative: 0.33
+        }
+        const conf = Math.max(c.positive, c.neutral, c.negative)
+        return { label, confidence: conf }
+      }
+      const moodVisual = l =>
+        /positive/.test(l)
+          ? { emoji: '😊', color: '#16a34a' }
+          : /negative/.test(l)
+          ? { emoji: '🙁', color: '#dc2626' }
+          : { emoji: '😐', color: '#6b7280' }
+
+      const SENT_STORE_KEY = 'sentiment_store_v1'
+      const sentStore = store(SENT_STORE_KEY, [])
+      function rememberSentiment(entry) {
+        const arr = sentStore.get()
+        arr.push(entry)
+        if (arr.length > 200) arr.splice(0, arr.length - 200)
+        sentStore.set(arr)
+      }
+      function recentSentiments(n = 20) {
+        const arr = sentStore.get()
+        return arr.slice(-n)
+      }
+      async function vibeRecapLLM(items) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`
+        const bullets = items
+          .map(
+            it =>
+              `- ${new Date(it.timestamp).toLocaleDateString()} • ${
+                it.placeTitle
+              } • ${it.label}${it.text ? ` • “${it.text}”` : ''}`
+          )
+          .join('\n')
+        const prompt = [
+          `Summarize these map sentiments into a brief travel-journal paragraph (2-4 sentences).`,
+          `No recommendations. No addresses. Just tone + themes.`,
+          bullets
+        ].join('\n')
+        const body = {
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.6 }
+        }
+        const jr = await postJSON(url, body).catch(() => null)
+        return (
+          jr?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+          'Not enough data yet.'
+        )
+      }
+
+      function dropSentimentMarker({
+        lon,
+        lat,
+        placeTitle,
+        label,
+        confidence,
+        text,
+        timestamp
+      }) {
+        if (!sentimentsGL) return
+        const { emoji, color } = moodVisual(label),
+          pct = Math.round((confidence || 0) * 100),
+          safe = text ? text.replace(/</g, '&lt;') : ''
+        const when = new Date(timestamp || Date.now()).toLocaleString()
+        const content = `<div style="font:13px/1.35 system-ui;">
+          <div><b>Sentiment:</b> ${label} (${pct}%) ${emoji}</div>
+          ${
+            safe
+              ? `<div style="margin-top:4px;color:#4b5563;"><b>Comment:</b> ${safe}</div>`
+              : ''
+          }
+          <div style="margin-top:4px;color:#4b5563;"><b>Added:</b> ${when}</div>
+        </div>`
+        const dot = new Graphic({
+          geometry: { type: 'point', longitude: lon, latitude: lat },
+          symbol: {
+            type: 'simple-marker',
+            size: 14,
+            color,
+            outline: { color: '#fff', width: 1 }
+          },
+          popupTemplate: { title: placeTitle, content }
+        })
+        const face = new Graphic({
+          geometry: { type: 'point', longitude: lon, latitude: lat },
+          symbol: {
+            type: 'picture-marker',
+            url: emojiUrl(emoji),
+            width: 22,
+            height: 22,
+            yoffset: 12
+          },
+          popupTemplate: { title: placeTitle, content }
+        })
+        sentimentsGL.addMany([dot, face])
+      }
+
+      function buildQuizCard({
+        placeTitle,
+        subtitle,
+        difficultyName,
+        question,
+        options,
+        onAnswer,
+        status,
+        explanation
+      }) {
+        const el = document.createElement('div')
+        el.className = 'quiz'
+        el.innerHTML = `
+          <div class="top"><div class="badge">${difficultyName}</div><div style="font-size:11px;color:#6b7280;">${subtitle}</div></div>
+          <h3 class="title">Quiz: ${placeTitle}</h3>
+          <p class="subtitle">${question}</p>
+          <form class="choices">
+            ${options
+              .map(
+                (o, i) =>
+                  `<label class="choice"><input type="radio" name="ans" value="${i}"><span>${String.fromCharCode(
+                    65 + i
+                  )}. ${o}</span></label>`
+              )
+              .join('')}
+          </form>
+          <div class="footer"><div class="status">${
+            status || ''
+          }</div><button class="btn ghost" data-next style="display:none">Another question</button></div>
+          <div class="explain" style="display:${
+            explanation ? 'block' : 'none'
+          }">${explanation || ''}</div>`
+        el.querySelector('.choices').addEventListener('change', e => {
+          const input = e.target.closest('input[type="radio"][name="ans"]')
+          if (!input) return
+          onAnswer(Number(input.value), input, el)
+        })
+        return el
+      }
+
+      function buildFeelOnlyCard({ placeTitle, subtitle, onFeel }) {
+        const uid = Math.random().toString(36).slice(2, 8)
+        const el = document.createElement('div')
+        el.className = 'quiz'
+        el.innerHTML = `
+          <div class="top"><div class="badge">Explore</div><div style="font-size:11px;color:#6b7280;">${subtitle}</div></div>
+          <h3 class="title">${placeTitle}</h3>
+          <p class="subtitle">Add a quick sentiment tag for this spot.</p>
+          <div class="feel" style="margin-top:8px">
+            <div class="row">
+              <input id="feel-${uid}" placeholder="e.g. love this park / sketchy at night / meh coffee">
+              <button class="btn" id="feelbtn-${uid}">Save tag</button>
+            </div>
+            <div class="k" id="feelstatus-${uid}" style="margin-top:4px;color:#6b7280;"></div>
+          </div>`
+        el.querySelector(`#feelbtn-${uid}`).onclick = () => {
+          const t = el.querySelector(`#feel-${uid}`).value.trim()
+          if (!t) return
+          onFeel(t, el.querySelector(`#feelstatus-${uid}`))
+          el.querySelector(`#feel-${uid}`).value = ''
+        }
+        return el
+      }
+
+      async function reverseGeocode(lat, lon) {
+        return locator.locationToAddress(GEOCODER_URL, {
+          location: point(lon, lat)
+        })
+      }
+      async function findCandidates(lat, lon) {
+        const outFields = [
+          'PlaceName',
+          'Type',
+          'Place_addr',
+          'StAddr',
+          'City',
+          'Neighborhood',
+          'Region',
+          'LongLabel',
+          'Match_addr'
+        ]
+        const results = await locator.addressToLocations(GEOCODER_URL, {
+          location: point(lon, lat),
+          outFields,
+          maxLocations: 30
+        })
+        const seen = new Set()
+        return (results || [])
+          .map(c => {
+            const a = c?.attributes || {},
+              raw =
+                a.PlaceName?.trim?.() ||
+                a.Match_addr?.trim?.() ||
+                a.LongLabel?.trim?.() ||
+                a.Place_addr?.trim?.() ||
+                a.StAddr?.trim?.() ||
+                ''
+            const name = raw ? (raw.split(',')[0] || raw).trim() : ''
+            return name && !seen.has(name) ? (seen.add(name), { name }) : null
+          })
+          .filter(Boolean)
+      }
+
+      function buildOpenAIQuestionMessages(
+        place,
+        lat,
+        lon,
+        allowed,
+        diff,
+        deadline
+      ) {
+        const rules =
+          {
+            easy: [
+              'Ask a single-step, concrete question about the immediate area.',
+              "Use plain language. No trick answers or 'All of the above'."
+            ],
+            medium: [
+              'Use a simple spatial relationship (distance, direction, neighborhood).',
+              'Require at most two reasoning steps.'
+            ],
+            hard: [
+              'Use nuanced local geography (waterways, historical neighborhoods, bearings).',
+              'Require 2–3 reasoning steps, but keep it answerable quickly.'
+            ]
+          }[diff] || []
+
+        const sys = `You are a cartography quiz writer. Produce one unique multiple-choice question grounded in the coordinates and allowed nearby names only.`
+
+        const user = [
+          `Place (title): ${place}`,
+          `Coordinates: ${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+          `Allowed names (ONLY use these proper nouns if you mention places): ${JSON.stringify(
+            allowed.slice(0, 8)
+          )}`,
+          `Difficulty: ${diff} (deadline ~${deadline}s)`,
+          `Constraints:`,
+          `- Four options, exactly one correct.`,
+          `- Options must be concise, distinct, and plausible. No 'All of the above', no duplicates.`,
+          `- Keep it interesting and locally flavored.`,
+          `- Do not require external research beyond typical map knowledge.`,
+          ...rules.map(r => `- ${r}`),
+          `Return ONLY a JSON object with:`,
+          `{ "question": string, "options": [string, string, string, string], "answerIndex": 0-3, "explanation": string }`,
+          `No prose. No markdown.`
+        ].join('\n')
+
+        return [
+          { role: 'system', content: sys },
+          { role: 'user', content: user }
+        ]
+      }
+
+      async function openAIChatJSON(messages) {
+        const body = {
+          model: OPENAI_MODEL,
+          messages,
+          temperature: 0.8,
+          response_format: { type: 'json_object' }
+        }
+        const jr = await postJSON(OPENAI_CHAT_URL, body, {
+          Authorization: `Bearer ${OPENAI_API_KEY}`
+        })
+        const text = jr?.choices?.[0]?.message?.content || '{}'
+        return text
+      }
+
+      async function generateQuestion(place, lat, lon, near, diff, deadline) {
+        const cached = getCached(lat, lon, diff)
+        if (cached) return cached
+        const messages = buildOpenAIQuestionMessages(
+          place,
+          lat,
+          lon,
+          near,
+          diff,
+          deadline
+        )
+        let obj = null
+        try {
+          const raw = await openAIChatJSON(messages)
+          obj = JSON.parse(raw)
+        } catch (e) {}
+        if (!obj || !Array.isArray(obj.options)) {
+          const fallback = near.map(n => n).slice(0, 4)
+          obj = {
+            question: `Which of these is near ${place}?`,
+            options:
+              fallback.length === 4
+                ? fallback
+                : ['City Hall', 'Central Library', 'Transit Center', 'Museum'],
+            answerIndex: 0,
+            explanation: ''
+          }
+        }
+        const q = {
+          question: String(obj.question || `What’s near ${place}?`),
+          options: (obj.options || []).slice(0, 4).map(String),
+          answerIndex: Math.max(0, Math.min(3, Number(obj.answerIndex || 0))),
+          explanation: String(obj.explanation || '')
+        }
+        setCached(lat, lon, diff, q)
+        return q
+      }
+
+      let lastSession = null
+
+      async function showQuizAt(view, lat, lon) {
+        const prof = DIFF[currentIdx]
+        const near = await findCandidates(lat, lon).catch(() => [])
+        const rev = await reverseGeocode(lat, lon).catch(() => null)
+        const place =
+          near[0]?.name ||
+          rev?.attributes?.PlaceName ||
+          rev?.attributes?.Match_addr ||
+          rev?.address ||
+          'This spot'
+        const subtitle = `(${lat.toFixed(5)}, ${lon.toFixed(5)})`
+        const q = await generateQuestion(
+          place,
+          lat,
+          lon,
+          near.map(n => n.name),
+          prof.key,
+          prof.deadline
+        )
+        console.log(
+          `[Answer] ${String.fromCharCode(65 + q.answerIndex)}: ${
+            q.options[q.answerIndex]
+          }`
+        )
+
+        lastSession = {
+          startedAt: performance.now(),
+          idx: currentIdx,
+          answered: false,
+          lat,
+          lon,
+          place
+        }
+        updateDash()
+        const card = buildQuizCard({
+          placeTitle: place,
+          subtitle,
+          difficultyName: prof.name,
+          question: q.question,
+          options: q.options,
+          onAnswer: async (i, input, root) => {
+            if (lastSession?.answered) return
+            const e = (performance.now() - lastSession.startedAt) / 1000
+            const labels = root.querySelectorAll('.choice')
+            labels.forEach(l => (l.querySelector('input').disabled = true))
+            const ok = i === q.answerIndex
+            labels.forEach((l, j) => {
+              if (j === q.answerIndex) l.classList.add('correct')
+              if (j === i && !ok) l.classList.add('wrong')
+            })
+            const st = root.querySelector('.status')
+            st.innerHTML = ok
+              ? `✅ Correct <span class="pill ${
+                  e <= prof.deadline ? 'fast' : 'slow'
+                }">${e.toFixed(1)}s</span>`
+              : `❌ Not quite · answer was <b>${String.fromCharCode(
+                  65 + q.answerIndex
+                )}</b>`
+            const ex = root.querySelector('.explain')
+            if (q.explanation) {
+              ex.style.display = 'block'
+              ex.textContent = q.explanation
+            }
+
+            currentIdx = await onlineTrain(ok, e, currentIdx)
+            const stat = updateStats(ok, e, false)
+            lastSession.answered = true
+
+            if (ok) {
+              maybeUnlockBasemap(stat.correct || 0)
+              fireConfettiAt(view, lon, lat)
+            }
+            renderUnlocks()
+            const next = root.querySelector('[data-next]')
+            next.style.display = 'inline-block'
+            next.onclick = async () => {
+              loader.style.display = 'grid'
+              try {
+                const follow = await showQuizAt(view, lat, lon)
+                view.popup.content = follow
+              } finally {
+                loader.style.display = 'none'
+              }
+            }
+          }
+        })
+
+        return card
+      }
+
+      async function showSentimentTagAt(view, lat, lon) {
+        const near = await findCandidates(lat, lon).catch(() => [])
+        const rev = await reverseGeocode(lat, lon).catch(() => null)
+        const place =
+          near[0]?.name ||
+          rev?.attributes?.PlaceName ||
+          rev?.attributes?.Match_addr ||
+          rev?.address ||
+          'This spot'
+        const subtitle = `(${lat.toFixed(5)}, ${lon.toFixed(5)})`
+        const card = buildFeelOnlyCard({
+          placeTitle: place,
+          subtitle,
+          onFeel: async (text, statusEl) => {
+            statusEl.textContent = 'Checking...'
+            const { label, confidence } = await analyzeSentimentAzureRaw(text)
+
+            const entry = {
+              lon,
+              lat,
+              placeTitle: place,
+              label,
+              confidence,
+              text,
+              timestamp: Date.now()
+            }
+            rememberSentiment(entry)
+            dropSentimentMarker(entry)
+
+            const pct = Math.round(confidence * 100)
+            const count = incrementRatings()
+            const badge = checkForBadge(count)
+            if (badge)
+              toastUnlock(
+                `Badge earned: ${badge.name}`,
+                `${badge.emoji} You have rated ${count} places`
+              )
+            renderBadges()
+            statusEl.textContent = `Saved as ${label} (${pct}%)`
+          }
+        })
+        return card
+      }
+
+      vibeRecapBtn.onclick = async () => {
+        const items = recentSentiments(20)
+        if (!items.length) {
+          const n = document.createElement('calcite-notice')
+          Object.assign(n, {
+            kind: 'info',
+            icon: 'information',
+            width: 'auto',
+            open: true
+          })
+          n.innerHTML = `<div slot="title">Mood recap</div><div slot="message">Add a few sentiments first.</div>`
+          toaster.appendChild(n)
+          setTimeout(() => n.remove(), 4000)
+          return
+        }
+        loader.style.display = 'grid'
+        try {
+          const summary = await vibeRecapLLM(items)
+          const n = document.createElement('calcite-notice')
+          Object.assign(n, {
+            kind: 'brand',
+            icon: 'text',
+            width: 'auto',
+            open: true
+          })
+          n.innerHTML = `<div slot="title">Mood recap</div><div slot="message">${summary.replace(
+            /</g,
+            '&lt;'
+          )}</div>`
+          toaster.appendChild(n)
+          setTimeout(() => n.remove(), 12000)
+        } finally {
+          loader.style.display = 'none'
+        }
+      }
+
+      function handleAbandon() {
+        if (!lastSession || lastSession.answered) return
+        const e = (performance.now() - lastSession.startedAt) / 1000
+        updateStats(false, e, true)
+        lastSession = null
+      }
+
+      const withLoader =
+        fn =>
+        async (...a) => {
+          loader.style.display = 'grid'
+          try {
+            return await fn(...a)
+          } finally {
+            loader.style.display = 'none'
+          }
+        }
+      const openPopupAtPoint = withLoader(async mp => {
+        marker({ longitude: mp.longitude, latitude: mp.latitude })
+        try {
+          const card = await showQuizAt(view, mp.latitude, mp.longitude)
+          view.popup.open({ title: 'GeoExplorer', location: mp, content: card })
+        } catch (e) {
+          console.error(e)
+          view.popup.open({
+            title: 'GeoExplorer',
+            location: mp,
+            content:
+              'Could not load a question here. Check OpenAI key or try another spot.'
+          })
+        }
+      })
+      const openFeelPopupAtPoint = withLoader(async mp => {
+        marker({ longitude: mp.longitude, latitude: mp.latitude })
+        try {
+          const card = await showSentimentTagAt(view, mp.latitude, mp.longitude)
+          view.popup.open({ title: 'GeoExplorer', location: mp, content: card })
+        } catch {
+          view.popup.open({
+            title: 'GeoExplorer',
+            location: mp,
+            content: 'Could not load this spot. Try another one.'
+          })
+        }
+      })
+
+      function fireConfettiAt(view, lon, lat) {
+        const sp = view.toScreen({ longitude: lon, latitude: lat })
+        const origin =
+          sp && Number.isFinite(sp.x) && Number.isFinite(sp.y)
+            ? { x: sp.x / view.width, y: sp.y / view.height }
+            : undefined
+        confetti({
+          startVelocity: 45,
+          spread: 70,
+          gravity: 0.9,
+          scalar: 0.9,
+          ticks: 200,
+          particleCount: 160,
+          ...(origin ? { origin } : {})
+        })
+      }
+
+      async function resetModel() {
+        try {
+          await tf.io.removeModel(STORAGE_KEY)
+        } catch {}
+        model = await createModel()
+        const { xs, ys } = seedData()
+        await model.fit(xs, ys, {
+          epochs: 80,
+          batchSize: 8,
+          shuffle: true,
+          verbose: 0
+        })
+        xs.dispose()
+        ys.dispose()
+        await model.save(STORAGE_KEY)
+      }
+      async function resetStats() {
+        try {
+          view?.popup?.close?.()
+        } catch {}
+        saveStats({ ...STAT_DEFAULTS })
+        currentIdx = 0
+        if (clicksGL) clicksGL.removeAll()
+        if (sentimentsGL) sentimentsGL.removeAll()
+        resetBadges()
+        resetUnlocks()
+        applyBasemap(getActiveBasemap())
+        clearQuestionCache()
+        localStorage.removeItem(SENT_STORE_KEY)
+        modeLS.set(true)
+        sentLS.set(false)
+        quizToggle.checked = true
+        sentimentToggle.checked = false
+        await resetModel()
+        updateDash()
+        renderUnlocks()
+        const n = document.createElement('calcite-notice')
+        Object.assign(n, {
+          kind: 'info',
+          icon: 'refresh',
+          width: 'auto',
+          open: true
+        })
+        n.innerHTML = `<div slot="title">Everything reset</div><div slot="message">Stats, difficulty, badges, unlocks, and cache cleared.</div>`
+        toaster.appendChild(n)
+        setTimeout(() => n.remove(), 4000)
+        return loadStats()
+      }
+      resetStatsBtn.onclick = () => {
+        resetStats()
+      }
+
+      const mapEl = document.getElementById('map')
+      mapEl.addEventListener('arcgisViewReadyChange', async evt => {
+        view = evt.target.view
+        map = evt.target.map
+        if (!view || !map) return
+        clicksGL = new GraphicsLayer({ id: 'clicks' })
+        sentimentsGL = new GraphicsLayer({ id: 'sentimentsGL' })
+        map.addMany([clicksGL, sentimentsGL])
+        await view.when()
+        view.popup.dockEnabled = true
+        view.popup.dockOptions = { position: 'top-right', breakpoint: false }
+        view.popup.visibleElements = { actionBar: false }
+        reactive.watch(
+          () => view.popup.visible,
+          v => {
+            if (!v) handleAbandon()
+          }
+        )
+        let opening = false
+        view.on('click', async evt => {
+          if (opening || !evt?.mapPoint) return
+          const ht = await view.hitTest(evt)
+          const hitSentiment = ht?.results?.some(
+            r => r?.graphic?.layer?.id === sentimentsGL.id
+          )
+          if (hitSentiment) return
+          opening = true
+          try {
+            if (quizOn()) await openPopupAtPoint(evt.mapPoint)
+            else if (sentimentOn()) await openFeelPopupAtPoint(evt.mapPoint)
+          } finally {
+            opening = false
+          }
+        })
+        renderUnlocks()
+        applyBasemap(getActiveBasemap())
+        updateDash()
+        renderBadges()
+        await initModel()
+      })
+    </script>
+  </body>
+</html>

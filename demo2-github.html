@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Countries Layer - AI Google Gemini</title>
+
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.32/esri/themes/light/main.css"
+    />
+
+    <script>
+      esriConfig = {
+        apiKey: 'YOUR_ARCGIS_API_KEY'
+      }
+    </script>
+
+    <script
+      type="module"
+      src="https://js.arcgis.com/calcite-components/3.0.3/calcite.esm.js"
+    ></script>
+    <script src="https://js.arcgis.com/4.32/"></script>
+    <script
+      type="module"
+      src="https://js.arcgis.com/map-components/4.32/arcgis-map-components.esm.js"
+    ></script>
+
+    <style>
+      .main-container {
+        display: flex;
+        height: 100vh;
+      }
+
+      .left-column {
+        flex: 2;
+      }
+
+      .right-column {
+        flex: 1;
+        padding: 1rem;
+        overflow-y: auto;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          sans-serif;
+      }
+
+      arcgis-map {
+        height: 100%;
+        width: 100%;
+      }
+
+      .input-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+
+      .input-container calcite-input {
+        flex: 1;
+        margin-right: 1rem;
+      }
+
+      .guess-container {
+        margin-bottom: 0.75rem;
+      }
+
+      #guessResult {
+        margin-top: 0.25rem;
+        font-size: 0.85rem;
+        color: #4b5563;
+      }
+
+      #guessResult.correct {
+        color: #15803d;
+      }
+
+      #guessResult.miss {
+        color: #b91c1c;
+      }
+
+      #countryList {
+        margin: 1rem 0;
+        padding: 0;
+        list-style: none;
+        font-size: 0.95rem;
+      }
+
+      #countryList li {
+        margin: 0.25rem 0;
+      }
+
+      #explanation {
+        margin: 0.5rem 0;
+        padding: 0.5rem;
+        background: #f3f4f6;
+        font-size: 0.9rem;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="main-container">
+      <div class="left-column">
+        <arcgis-map
+          id="map"
+          basemap="arcgis/community"
+          center="20,0"
+          zoom="1"
+        >
+          <arcgis-zoom position="top-left"></arcgis-zoom>
+        </arcgis-map>
+      </div>
+
+      <div class="right-column">
+        <div class="input-container">
+          <calcite-input
+            id="userInput"
+            placeholder="E.g., List the top 3 hottest countries"
+          ></calcite-input>
+          <calcite-button id="submitQuery">Submit</calcite-button>
+        </div>
+
+        <div class="guess-container">
+          <calcite-label>
+            Guess one country before AI answers
+            <calcite-input
+              id="guessInput"
+              placeholder="E.g., USA"
+            ></calcite-input>
+          </calcite-label>
+          <div id="guessResult"></div>
+        </div>
+
+        <ul id="countryList"></ul>
+        <div id="explanation"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      const googleGeminiApiKey = 'YOUR_GEMINI_API_KEY'
+
+      const featureLayerURL =
+        'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Countries_(Generalized)/FeatureServer/0'
+
+      const mapEl = document.getElementById('map')
+      const countryListEl = document.getElementById('countryList')
+      const explanationEl = document.getElementById('explanation')
+      const guessInputEl = document.getElementById('guessInput')
+      const guessResultEl = document.getElementById('guessResult')
+
+      let currentHighlightLayer = null
+
+      function normalizeCountryName(name) {
+        const n = String(name || '').trim()
+        if (!n) return ''
+        const upper = n.toUpperCase().replace(/\./g, '')
+        if (
+          upper === 'USA' ||
+          upper === 'US' ||
+          upper === 'UNITED STATES' ||
+          upper === 'UNITED STATES OF AMERICA'
+        ) {
+          return 'united states'
+        }
+        if (
+          upper === 'UK' ||
+          upper === 'UNITED KINGDOM' ||
+          upper === 'GREAT BRITAIN' ||
+          upper === 'BRITAIN'
+        ) {
+          return 'united kingdom'
+        }
+        return n.toLowerCase()
+      }
+
+      function normalizeForLayer(name) {
+        const canon = normalizeCountryName(name)
+        if (canon === 'united states') return 'United States'
+        if (canon === 'united kingdom') return 'United Kingdom'
+        return name
+      }
+
+      const fetchCountriesFromQuery = async q => {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleGeminiApiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text:
+                          q +
+                          " Only list the COUNTRY NAMES in a numbered list. Then on a new line start with 'Explanation:' and give one short sentence."
+                      }
+                    ]
+                  }
+                ]
+              })
+            }
+          )
+
+          if (!res.ok) {
+            const errText = await res.text().catch(() => '')
+            console.info('Gemini HTTP error', res.status, errText)
+            return {
+              countries: ['France', 'Germany', 'Spain'],
+              explanation:
+                'Fallback example because the Gemini API returned an error. Check the key, project, or origin settings later.'
+            }
+          }
+
+          const data = await res.json()
+          const text =
+            data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+          if (!text) {
+            console.info('Gemini response missing expected text', data)
+            return {
+              countries: ['France', 'Germany', 'Spain'],
+              explanation:
+                'Fallback example because the Gemini response did not include text in the expected format.'
+            }
+          }
+
+          const lines = text.split('\n')
+          const countries = []
+          let explanation = ''
+
+          for (let line of lines) {
+            line = line.replace(/^\d+\.?\s*/g, '').trim()
+            if (!line) continue
+
+            if (line.toLowerCase().startsWith('explanation:')) {
+              explanation = line.replace(/explanation:\s*/i, '').trim()
+            } else {
+              countries.push(line)
+            }
+          }
+
+          if (!countries.length) {
+            return {
+              countries: ['France', 'Germany', 'Spain'],
+              explanation:
+                explanation ||
+                'Fallback example because the AI did not return any clear country names.'
+            }
+          }
+
+          return {
+            countries,
+            explanation:
+              explanation ||
+              'Countries chosen by the AI based on your prompt.'
+          }
+        } catch (err) {
+          console.info('Gemini fetch failed', err)
+          return {
+            countries: ['France', 'Germany', 'Spain'],
+            explanation:
+              'Fallback example because the Gemini request failed (network or API issue).'
+          }
+        }
+      }
+
+      const highlightCountries = async countries => {
+        if (currentHighlightLayer && mapEl.map) {
+          mapEl.map.remove(currentHighlightLayer)
+        }
+
+        const normalized = countries.map(normalizeForLayer)
+
+        const where = `COUNTRY IN (${normalized
+          .map(c => `'${c.replace(/'/g, "''")}'`)
+          .join(',')})`
+
+        const [FeatureLayer, Graphic, GraphicsLayer] = await Promise.all([
+          $arcgis.import('esri/layers/FeatureLayer'),
+          $arcgis.import('esri/Graphic'),
+          $arcgis.import('esri/layers/GraphicsLayer')
+        ])
+
+        const fl = new FeatureLayer({
+          url: featureLayerURL
+        })
+
+        const qp = {
+          where,
+          outFields: ['*'],
+          returnGeometry: true
+        }
+
+        const result = await fl.queryFeatures(qp)
+        const hlLayer = new GraphicsLayer()
+
+        result.features.forEach(f => {
+          const g = new Graphic({
+            geometry: f.geometry,
+            attributes: f.attributes,
+            symbol: {
+              type: 'simple-fill',
+              color: [255, 0, 0, 0.5],
+              outline: { color: 'red', width: 2 }
+            }
+          })
+          hlLayer.add(g)
+        })
+
+        currentHighlightLayer = hlLayer
+        if (mapEl.map) {
+          mapEl.map.add(hlLayer)
+        }
+      }
+
+      const displayCountries = countries => {
+        countryListEl.innerHTML = countries.map(c => `<li>${c}</li>`).join('')
+      }
+
+      const displayExplanation = exp => {
+        explanationEl.textContent = exp || ''
+      }
+
+      const evaluateGuess = (guess, countries) => {
+        guessResultEl.textContent = ''
+        guessResultEl.classList.remove('correct', 'miss')
+
+        const trimmedGuess = guess.trim()
+        if (!trimmedGuess) return
+
+        const normGuess = normalizeCountryName(trimmedGuess)
+
+        const match = countries.some(name => {
+          const normName = normalizeCountryName(String(name))
+          return normName && normName === normGuess
+        })
+
+        if (match) {
+          guessResultEl.textContent =
+            'Nice prediction. Your guess is in the AI list.'
+          guessResultEl.classList.add('correct')
+        } else {
+          guessResultEl.textContent =
+            'Your guess did not match this time. Try a new prompt or a different guess.'
+          guessResultEl.classList.add('miss')
+        }
+      }
+
+      document
+        .getElementById('submitQuery')
+        .addEventListener('click', async () => {
+          const q = document.getElementById('userInput').value.trim()
+          if (!q) return
+
+          const guess = guessInputEl.value || ''
+          guessResultEl.textContent = ''
+          guessResultEl.classList.remove('correct', 'miss')
+
+          const { countries, explanation } = await fetchCountriesFromQuery(q)
+
+          if (countries && countries.length) {
+            evaluateGuess(guess, countries)
+            await highlightCountries(countries)
+            displayCountries(countries)
+            displayExplanation(
+              explanation ||
+                'Here is a sample explanation for the highlighted countries.'
+            )
+          } else {
+            countryListEl.innerHTML = ''
+            displayExplanation(
+              'No countries returned. Try a simpler or clearer prompt.'
+            )
+          }
+        })
+    </script>
+  </body>
+</html>
