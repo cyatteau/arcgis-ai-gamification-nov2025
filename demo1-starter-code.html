@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Question Map</title>
+    <script>
+      var esriConfig = {
+        apiKey:
+          "YOUR_API_KEY"
+      };
+    </script>
+    <script>
+      const OPENAI_API_KEY =
+        "YOUR_API_KEY";
+    </script>
+
+    <script type="module" src="https://js.arcgis.com/calcite-components/3.3.3/calcite.esm.js"></script>
+    <script src="https://js.arcgis.com/4.34/"></script>
+    <script type="module" src="https://js.arcgis.com/4.34/map-components/"></script>
+  </head>
+  <body>
+    <arcgis-map
+      basemap="arcgis/topographic"
+      center="-79.38, 43.65"
+      zoom="13"
+    >
+      <arcgis-popup slot="popup"></arcgis-popup>
+    </arcgis-map>
+
+    <script>
+      const arcgisMap = document.querySelector("arcgis-map");
+      const popup = document.querySelector("arcgis-popup");
+    </script>
+  </body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Question Map</title>
+    <script>
+      var esriConfig = {
+        apiKey:
+          "YOUR_API_KEY"
+      };
+    </script>
+
+    <script>
+      const OPENAI_API_KEY =
+        "YOUR_API_KEY";
+    </script>
+    <script
+      type="module"
+      src="https://js.arcgis.com/calcite-components/3.3.3/calcite.esm.js"
+    ></script>
+    <script src="https://js.arcgis.com/4.34/"></script>
+    <script
+      type="module"
+      src="https://js.arcgis.com/4.34/map-components/"
+    ></script>
+  </head>
+  <body>
+    <arcgis-map
+      basemap="arcgis/topographic"
+      center="-79.38, 43.65"
+      zoom="13"
+    >
+      <arcgis-popup slot="popup"></arcgis-popup>
+    </arcgis-map>
+
+    <script>
+      const arcgisMap = document.querySelector("arcgis-map");
+      const popup = document.querySelector("arcgis-popup");
+
+      arcgisMap.addEventListener("arcgisViewClick", async (e) => {
+        const mapPt = e.detail.mapPoint;
+        console.log("Clicked at", mapPt.longitude, mapPt.latitude);
+
+        const prompt = `You are helping someone explore an area. Location: longitude: ${mapPt.longitude}, latitude: ${mapPt.latitude}. Write one short spooky question about this place and a short answer.` 
+
+        const response = await fetch("https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.6
+            })
+          }
+        );
+
+        const data = await response.json();
+        console.log("Raw OpenAI response:", data);
+
+        const content = data.choices?.[0]?.message?.content;
+
+        popup.open({
+          location: mapPt,
+          heading: "AI-generated question + answer",
+          content
+        });
+      });
+    </script>
+  </body>
+</html>
