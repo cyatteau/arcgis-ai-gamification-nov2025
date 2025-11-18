@@ -36,6 +36,9 @@ to turn web maps into adaptive learning experiences.
   - Adjust difficulty over time  
   - Capture sentiment and a short “vibe recap” of the map session
 
+- `slides.html`
+   The slide deck used for the presentation.
+  
 ---
 
 ## Running the demos
