@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI-Powered GeoExplorer: Adaptive Web Quizzes with ArcGIS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Reveal.js -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/reveal.js@4.5.0/dist/reveal.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/reveal.js@4.5.0/dist/theme/black.css"
+      id="theme"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/reveal.js@4.5.0/plugin/highlight/monokai.css"
+    />
+
+    <style>
+      :root {
+        --ink: #f5f6ff;
+        --muted: #c6c8f7;
+        --accent: #9a7fff;
+        --accent-2: #6f5aff;
+        --surface: #0b0b13;
+        --surface-2: #141427;
+        --ok: #33d69f;
+        --warn: #ffd166;
+        --bad: #ff6b6b;
+      }
+
+      body {
+        background: radial-gradient(
+            1200px 800px at 20% 10%,
+            #241857 0%,
+            #070711 60%
+          )
+          fixed;
+      }
+
+      .reveal {
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial;
+        --r-main-font-size: 44px;
+        --r-heading-font-weight: 800;
+        --r-heading1-size: 96px;
+        --r-heading2-size: 72px;
+        --r-heading3-size: 56px;
+        --r-code-font: 0.9em/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco,
+          Consolas, "Liberation Mono", monospace;
+      }
+
+      .reveal .slides {
+        text-align: left;
+      }
+
+      .reveal .slides section {
+        padding: 0 60px;
+      }
+
+      .card {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.04),
+          rgba(255, 255, 255, 0.02)
+        );
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        padding: 26px 30px;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+      }
+
+      .accent {
+        color: var(--accent);
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .kicker {
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-size: 0.7em;
+        color: var(--muted);
+      }
+
+      .title h1 {
+        font-size: var(--r-heading1-size);
+        line-height: 1.05;
+        margin: 0 0 10px;
+        background: linear-gradient(
+          95deg,
+          #ffffff 0%,
+          var(--accent) 55%,
+          var(--accent-2) 100%
+        );
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .subtitle {
+        font-size: 1.05em;
+        color: var(--muted);
+      }
+
+      .byline {
+        margin-top: 12px;
+        font-size: 0.95em;
+        color: var(--muted);
+      }
+
+      ul.big {
+        list-style: disc inside;
+      }
+
+      ul.big > li {
+        margin: 14px 0;
+        line-height: 1.3;
+        font-size: 1.1em;
+      }
+
+      .reveal h2 {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0.15em 0 0.4em;
+      }
+
+      .reveal h2::before {
+        content: "";
+        width: 10px;
+        height: 1.2em;
+        border-radius: 4px;
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      }
+
+      .fragment.fade-up {
+        transform: translateY(12px);
+        opacity: 0;
+        transition: 0.5s ease;
+      }
+
+      .fragment.fade-up.visible {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      /* Code styling similar to gamification deck */
+      pre {
+        font-size: 1.02em !important;
+        line-height: 1.5 !important;
+        tab-size: 2;
+        height: 86vh;
+        overflow: hidden;
+      }
+
+      pre.tall {
+        max-height: 92vh;
+      }
+
+      .reveal pre {
+        max-width: none;
+        padding-right: 28px !important;
+        padding-left: 24px !important;
+        background: #05060d !important;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.65);
+      }
+
+      .reveal pre code {
+        display: block;
+        overflow-x: auto;
+        white-space: pre;
+      }
+
+      .fit {
+        max-height: 84vh;
+        overflow: hidden;
+      }
+
+      .reveal .progress {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .reveal .progress span {
+        background: var(--accent-2);
+      }
+
+      /* Layout helpers */
+      .two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      .tag-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .tag {
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.7em;
+        background: rgba(154, 127, 255, 0.14);
+        color: #e0ddff;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+      }
+
+      .demo-label {
+        font-size: 0.9em;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      img.qr {
+        max-width: 360px;
+        border-radius: 16px;
+        box-shadow: 0 16px 30px rgba(0, 0, 0, 0.6);
+        background: #fff;
+        padding: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <!-- 1. Title -->
+        <section data-auto-animate>
+          <div class="title">
+            <div class="kicker">AI Talks</div>
+            <br />
+            <h1>AI-Powered GeoExplorer</h1>
+            <div class="subtitle">
+              Adaptive web quizzes with ArcGIS, Gemini, and gamification
+            </div>
+            <div class="byline">
+              <em
+                >Courtney Yatteau · Developer Advocate, Esri Developer
+                Experience</em
+              >
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Agenda -->
+        <section data-auto-animate>
+          <h2>What we will cover</h2>
+          <div class="card">
+            <ul class="big">
+              <li class="fragment fade-up">
+                Why AI and gamification pair well with maps
+              </li>
+              <li class="fragment fade-up">
+                Demo 1 · AI Question Map (live coding)
+              </li>
+              <li class="fragment fade-up">
+                Demo 2 · Gemini + ArcGIS: country selection by description
+              </li>
+              <li class="fragment fade-up">
+                Demo 3 · GeoExplorer: adaptive quizzes, sentiment, and unlocks
+              </li>
+              <li class="fragment fade-up">
+                Patterns and resources you can reuse in your own projects
+              </li>
+            </ul>
+            <div style="text-align:center;" class="muted">
+              <img
+                src="repo.png"
+                alt="Repo with demos"
+                class="qr"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Gamification basics -->
+        <section data-auto-animate>
+          <h2>Gamification - What is it?</h2>
+          <div class="card fit">
+            <ul class="big">
+              <li class="fragment fade-up">
+                Use familiar game mechanics in places that are not games
+              </li>
+              <li class="fragment fade-up">
+                Points, levels, streaks, and unlocks tied to clear goals
+              </li>
+              <li class="fragment fade-up">
+                Turn passive map viewing into a sense of progress
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 4. Why gamify mapping apps -->
+        <section data-auto-animate>
+          <h2>Why gamify mapping apps</h2>
+          <div class="card fit">
+            <ul class="big">
+              <li class="fragment fade-up">
+                Turn “opened a map once” into “one more question” loops
+              </li>
+              <li class="fragment fade-up">
+                Nudge people toward key layers, views, or workflows
+              </li>
+              <li class="fragment fade-up">
+                Help learners remember places by answering questions
+              </li>
+              <li class="fragment fade-up">
+                Reward exploration with streaks, XP, and basemap unlocks
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 5. ArcGIS + AI quick overview -->
+        <section data-auto-animate>
+          <h2>ArcGIS + AI in this session</h2>
+          <div class="card fit">
+            <ul class="big">
+              <li class="fragment fade-up">
+                ArcGIS Maps SDK for JavaScript handles basemaps, clicks, geocoding, and layers
+              </li>
+              <li class="fragment fade-up">
+                Large language models (OpenAI, Gemini) generate questions and
+                summaries
+              </li>
+              <li class="fragment fade-up">
+                TensorFlow.js adjusts difficulty in the browser
+              </li>
+              <li class="fragment fade-up">
+                Azure AI scores sentiment to track how places feel
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 6. Demo 1: only one slide -->
+<section data-background-color="#141427" data-auto-animate>
+  <h2>Live demo 1 · AI Question Map</h2>
+  <div class="card">
+    <p class="muted">
+      Click anywhere on the map, send the coordinates to OpenAI, and
+      show a short question and answer about that spot.
+    </p>
+    <ul class="big">
+      <li class="fragment fade-up">
+        ArcGIS JS SDK map component for basemap and click events
+      </li>
+      <li class="fragment fade-up">
+        Prompt built from longitude and latitude
+      </li>
+      <li class="fragment fade-up">
+        Chat completions call returns one question and answer
+      </li>
+      <li class="fragment fade-up">
+        Popup shows whatever comes back exactly
+      </li>
+    </ul>
+  </div>
+</section>
+
+
+        <!-- 7. Transition to Demo 2 -->
+        <section data-auto-animate>
+          <h2>From one question to map-wide queries</h2>
+          <div class="card fit">
+            <ul class="big">
+              <li class="fragment fade-up">
+                Demo 1: start from a click and talk about a single spot
+              </li>
+              <li class="fragment fade-up">
+                Next pattern: start from a natural language query instead
+              </li>
+              <li class="fragment fade-up">
+                Let Gemini choose a set of countries that match the request
+              </li>
+              <li class="fragment fade-up">
+                Use a FeatureLayer query to highlight those countries on the map
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 8. Demo 2 overview -->
+        <section data-auto-animate data-background-color="#141427">
+          <h2>Demo 2 · Gemini + ArcGIS countries</h2>
+          <div class="card">
+            <p class="muted">
+              Ask a question and let Gemini
+              return names that drive a FeatureLayer query.
+            </p>
+          </div>
+        </section>
+
+        <!-- 9. Demo 2 code – Gemini request (small chunk) -->
+<section data-auto-animate>
+  <h2>Demo 2 · Ask Gemini for country names</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code class="language-js" data-trim data-line-numbers="1-4 | 5-9 | 10-19 | 20-24">
+const COUNTRIES_URL =
+  "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/" +
+  "World_Countries_(Generalized)/FeatureServer/0"
+
+async function fetchCountriesFromGemini(query) {
+  const prompt = query +
+    " Only list the country names in a numbered list." +
+    " Then on a new line start with 'Explanation:' and write one sentence."
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/` +
+    `gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    }
+  ).then(r => r.json())
+
+  const text = res.candidates?.[0]?.content?.parts?.[0]?.text || ""
+  return text.split("\n")
+}
+</code></pre>
+  </div>
+</section>
+
+
+<!-- 10. Demo 2 code – FeatureLayer query (small chunk) -->
+<section data-auto-animate>
+  <h2>Demo 2 · Highlight countries on the map</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code class="language-js" data-trim data-line-numbers="1-3 |4-7| 8-9 |11-19 | 21-32">
+import FeatureLayer from "@arcgis/core/layers/FeatureLayer.js"
+import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js"
+import Graphic from "@arcgis/core/Graphic.js"
+
+const highlightLayer = new GraphicsLayer()
+map.add(highlightLayer)
+
+async function highlightCountriesByName(names) {
+  highlightLayer.removeAll()
+
+  const fl = new FeatureLayer({ url: COUNTRIES_URL })
+  const where = "COUNTRY IN (" +
+    names.map(n => `'${n.replace(/'/g, "''")}'`).join(",") + ")"
+
+  const result = await fl.queryFeatures({
+    where,
+    outFields: ["*"],
+    returnGeometry: true
+  })
+
+  result.features.forEach(feature => {
+    highlightLayer.add(new Graphic({
+      geometry: feature.geometry,
+      attributes: feature.attributes,
+      symbol: {
+        type: "simple-fill",
+        color: [154, 127, 255, 0.4],
+        outline: { color: [154, 127, 255, 1], width: 1.5 }
+      }
+    }))
+  })
+}
+</code></pre>
+  </div>
+</section>
+
+        <!-- 12. GeoExplorer intro -->
+<section data-auto-animate>
+  <h2>Demo 3 · GeoExplorer overview</h2>
+  <div class="card two-col">
+    <div>
+      <ul class="big">
+        <li class="fragment fade-up">
+          Click anywhere on the map to start a quiz
+        </li>
+        <li class="fragment fade-up">
+          ArcGIS geocoding gives local context for each click
+        </li>
+        <li class="fragment fade-up">
+          LLM generates multiple choice questions from that context
+        </li>
+        <li class="fragment fade-up">
+          Difficulty and basemap unlocks respond to how you play
+        </li>
+        <li class="fragment fade-up">
+          Sentiment tags and a vibe recap capture how places feel over time
+        </li>
+      </ul>
+    </div>
+    <div>
+      <div class="demo-label">Tech stack</div>
+      <div class="card">
+        <div class="tag-grid">
+          <span class="tag">ArcGIS Maps SDK for JavaScript 4.x</span>
+          <span class="tag">ArcGIS map components</span>
+          <span class="tag">ArcGIS World Geocoding Service</span>
+          <span class="tag">OpenAI / Gemini</span>
+          <span class="tag">TensorFlow.js</span>
+          <span class="tag">Azure Text Analytics</span>
+          <span class="tag">Calcite Design System</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+        <!-- 13. GeoExplorer live demo -->
+        <section data-auto-animate data-background-color="#141427">
+          <h2>Live demo 3 · GeoExplorer</h2>
+          <div class="card">
+            <p class="muted">
+              Click a location, generate a quiz, adjust difficulty, and capture
+              how people feel about what they see.
+            </p>
+          </div>
+
+        </section>
+
+<section data-auto-animate>
+  <h2>Mechanic 1 · Context from ArcGIS</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code class="language-js" data-trim data-line-numbers="1-4 | 6-17 | 19-21 | 23-30">
+import * as locator from "@arcgis/core/rest/locator.js"
+
+const GEOCODER_URL =
+  "https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer"
+
+async function fetchContext(lat, lon) {
+  const rev = await locator.locationToAddress(GEOCODER_URL, {
+    location: { type: "point", longitude: lon, latitude: lat,
+      spatialReference: { wkid: 4326 } }
+  }).catch(() => null)
+
+  const near = await locator.addressToLocations(GEOCODER_URL, {
+    location: { type: "point", longitude: lon, latitude: lat,
+      spatialReference: { wkid: 4326 } },
+    maxLocations: 30,
+    outFields: ["PlaceName", "Match_addr", "LongLabel", "City"]
+  }).catch(() => [])
+
+  const title =
+    (rev?.attributes?.PlaceName || rev?.attributes?.Match_addr ||
+     near[0]?.attributes?.PlaceName || "This spot")
+
+  const names = near
+    .map(c => String(c.attributes?.PlaceName || c.attributes?.Match_addr || "")
+      .split(",")[0].trim())
+    .filter(Boolean)
+
+  const allowed = [...new Set(names)].slice(0, 8)
+  return { title, allowed }
+}
+</code></pre>
+  </div>
+</section>
+
+
+        <!-- Mechanic #2 — LLM-generated quiz content (prompt) -->
+        <section data-auto-animate>
+  <h2>Mechanic 2 · LLM-generated quiz content</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code class="language-js" data-trim data-line-numbers="1-3 | 5-13 | 15-18">
+function buildPrompt(title, allowed, difficultyKey, timeBudgetSec) {
+  const system =
+    "You write local geography quiz questions. Use only allowed names."
+
+  const user = [
+    `Title: ${title}`,
+    `Allowed place names: ${JSON.stringify(allowed)}`,
+    `Difficulty: ${difficultyKey} · target ~${timeBudgetSec}s`,
+    "Create ONE multiple choice question with 4 options.",
+    "Exactly one option must be correct.",
+    "Return JSON only:",
+    "{ question, options[4], answerIndex, explanation }"
+  ].join("\n")
+
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user }
+  ]
+}
+</code></pre>
+  </div>
+</section>
+
+
+        <!-- Mechanic #2 — LLM-generated quiz content (call + normalize) -->
+        <section data-auto-animate>
+  <h2>Mechanic 2 · LLM-generated quiz content</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code class="language-js" data-trim data-line-numbers="1-8 | 9-19 | 21-33">
+async function makeQuestion(messages, allowed) {
+  const body = {
+    model: "gpt-4o",
+    messages,
+    response_format: { type: "json_object" },
+    temperature: 0.8
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify(body)
+  }).then(r => r.json()).catch(() => null)
+
+  const raw = res?.choices?.[0]?.message?.content || "{}"
+  let obj; try { obj = JSON.parse(raw) } catch { obj = null }
+
+  const options = (Array.isArray(obj?.options) ? obj.options : [])
+    .map(String).filter(Boolean)
+
+  const padded = [...options, ...allowed,
+    "City Hall", "Library", "Transit Center", "Museum"].slice(0, 4)
+
+  return {
+    question: String(obj?.question || "Which option fits best here?"),
+    options: padded,
+    answerIndex: Math.min(3, Math.max(0, Number(obj?.answerIndex ?? 0))),
+    explanation: String(obj?.explanation || "")
+  }
+}
+</code></pre>
+  </div>
+</section>
+
+
+        <!-- Mechanic #3 — Adaptive difficulty (levels and rule) -->
+        <section data-auto-animate>
+  <h2>Mechanic 3 · Adaptive difficulty</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code class="language-js" data-trim data-line-numbers="1-4 | 6-15">
+const LEVELS = [
+  { id: "easy",   label: "Easy",   timeLimitSec: 8  },
+  { id: "medium", label: "Medium", timeLimitSec: 10 },
+  { id: "hard",   label: "Hard",   timeLimitSec: 12 }
+]
+
+function pickNextLevel(wasCorrect, secondsTaken, levelIndex) {
+  const limit = LEVELS[levelIndex].timeLimitSec
+  const fast = secondsTaken <= limit * 0.90
+  const slow = secondsTaken >= limit * 1.10
+
+  if (wasCorrect && fast) return Math.min(levelIndex + 1, LEVELS.length - 1)
+  if (!wasCorrect || slow) return Math.max(levelIndex - 1, 0)
+  return levelIndex
+}
+</code></pre>
+  </div>
+</section>
+
+
+        <!-- Mechanic #3 — Adaptive difficulty (TF.js learning) -->
+        <section data-auto-animate>
+  <h2>Mechanic 3 · Adaptive difficulty</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code
+  class="language-js"
+  data-trim
+  data-line-numbers="3-7 | 8-16 | 18-28 | 29-34"
+>
+const STORAGE_KEY = "localstorage://geoexplorer-diff"
+
+async function ensureModel() {
+  if (window.diffModel) return window.diffModel
+  try {
+    const m = await tf.loadLayersModel(STORAGE_KEY)
+    m.compile({ optimizer: "adam", loss: "categoricalCrossentropy" })
+    window.diffModel = m
+    return m
+  } catch {
+    const m = tf.sequential()
+    m.add(tf.layers.dense({ units: 8, activation: "relu", inputShape: [3] }))
+    m.add(tf.layers.dense({ units: LEVELS.length, activation: "softmax" }))
+    m.compile({ optimizer: "adam", loss: "categoricalCrossentropy" })
+    window.diffModel = m
+    return m
+  }
+}
+
+async function learnFromAnswer(wasCorrect, secondsTaken, levelIndex) {
+  const model = await ensureModel()
+  const nextIndex = pickNextLevel(wasCorrect, secondsTaken, levelIndex)
+
+  const oneHot = (i, n) =>
+    Array.from({ length: n }, (_, k) => (k === i ? 1 : 0))
+
+  const x = tf.tensor2d([[ wasCorrect ? 1 : 0, secondsTaken, levelIndex ]])
+  const y = tf.tensor2d([ oneHot(nextIndex, LEVELS.length) ])
+
+  await model.fit(x, y, { epochs: 6, batchSize: 1, shuffle: true, verbose: 0 })
+  x.dispose(); y.dispose()
+  await model.save(STORAGE_KEY)
+  return nextIndex
+}
+</code></pre>
+  </div>
+</section>
+
+
+
+
+        <!-- Mechanic #4 — Sentiment-aware feedback -->
+        <section data-auto-animate>
+          <h2>
+            Mechanic 4 — <span class="accent">Sentiment-aware feedback</span>
+          </h2>
+          <div class="card fit">
+            <pre
+              class="tall"
+            ><code class="language-js" data-trim data-line-numbers="1-8 | 9-16">
+async function analyzeSentiment(text) {
+  const body = { documents: [{ id:"1", language:"en", text }] }
+  const data = await fetch(SENTIMENT_URL, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", 
+              "Ocp-Apim-Subscription-Key": SENTIMENT_KEY },
+    body: JSON.stringify(body)
+  }).then(r=>r.json()).catch(()=>null)
+
+  const d = data?.documents?.[0]
+  return { label: d?.sentiment || "neutral", 
+    confidence: Math.max(
+      d?.confidenceScores?.positive||.34, 
+      d?.confidenceScores?.neutral||.33, 
+      d?.confidenceScores?.negative||.33) }
+}
+</code></pre>
+          </div>
+        </section>
+
+
+        <!-- Mechanic #5 — Gemini mood recap -->
+        <section data-auto-animate>
+  <h2>Mechanic 5 · Map mood recap</h2>
+  <div class="card fit">
+    <pre class="tall">
+<code class="language-js" data-trim data-line-numbers="1-7 | 8-13 | 15-18 | 20-32">
+async function vibeRecap(entries) {
+  const bullets = entries.map(e => {
+    const when = new Date(e.timestamp).toLocaleDateString()
+    const text = e.text ? `“${e.text}”` : ""
+    return `- ${when} · ${e.placeTitle} · ${e.label} ${text}`
+  }).join("\n")
+
+  const prompt = [
+    "Summarize these map sentiments as a short travel journal.",
+    "2 to 4 sentences. No addresses. No new recommendations.",
+    "Focus on tone and themes.",
+    bullets
+  ].join("\n")
+
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.6 }
+  }
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/` +
+    `gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }
+  ).then(r => r.json()).catch(() => null)
+
+  const text = res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+  return text || "Not enough data yet."
+}
+</code></pre>
+  </div>
+</section>
+
+
+        <!-- Playlist / QR slide -->
+        <section data-auto-animate data-background-color="#141427">
+          <h2>Explore the AI mapping playlist</h2>
+          <div class="card two-col">
+            <div>
+              <p class="big">
+                <strong>
+                  AI-Powered Mapping for the ArcGIS Web Developer (YouTube)
+                </strong>
+              </p>
+              <ul class="big">
+                <li class="fragment fade-up">
+                  Short, focused episodes you can watch anytime
+                </li>
+                <li class="fragment fade-up">
+                  Mix of ArcGIS Maps SDK, Esri Leaflet, and ArcGIS REST JS
+                </li>
+                <li class="fragment fade-up">
+                  Covers Gemini, OpenAI, Azure AI, TensorFlow.js, DeepAI, and
+                  more
+                </li>
+              </ul>
+            </div>
+            <div style="text-align:center;" class="muted">
+              <img
+                src="ai-series.png"
+                alt="QR code for AI-Powered Mapping playlist"
+                class="qr"
+              />
+              <p>youtube.com/playlist?list=PLhyRTW1lK2-FY0E7ROPpdG2OtW7ybL4Gm</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Putting the pieces together -->
+        <section data-auto-animate>
+          <h2>Putting the pieces together</h2>
+          <div class="card fit">
+            <ul class="big">
+              <li class="fragment fade-up">
+                ArcGIS provides the spatial truth: basemaps, geocoding, feature
+                layers
+              </li>
+              <li class="fragment fade-up">
+                AI models help with natural language, content, and adaptation
+              </li>
+              <li class="fragment fade-up">
+                Gamification wraps everything in goals, feedback, and rewards
+              </li>
+              <li class="fragment fade-up">
+                Together they turn maps into interactive, adaptive learning
+                spaces
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Key takeaways -->
+        <section data-auto-animate>
+          <h2>Key takeaways</h2>
+          <div class="card fit">
+            <ul class="big">
+              <li class="fragment fade-up">
+                Start with a small loop: one question, one highlight, one mood
+                marker
+              </li>
+              <li class="fragment fade-up">
+                Let AI handle natural language and summaries, keep GIS logic in
+                ArcGIS
+              </li>
+              <li class="fragment fade-up">
+                Use browser-friendly models like TensorFlow.js for adaptive
+                behavior
+              </li>
+              <li class="fragment fade-up">
+                Wrap the experience in clear goals and visible progress
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Thank you -->
+        <section data-background-color="#0b0b13" data-auto-animate>
+          <h2>Thank you</h2>
+          <div class="card">
+            <p class="big">
+              <span class="accent">Questions, ideas, or collaboration?</span>
+            </p>
+            <p class="muted">
+              Courtney Yatteau · Developer Advocate, Esri<br />
+            </p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Reveal.js core + plugins -->
+    <script src="https://unpkg.com/reveal.js@4.5.0/dist/reveal.js"></script>
+    <script src="https://unpkg.com/reveal.js@4.5.0/plugin/markdown/markdown.js"></script>
+    <script src="https://unpkg.com/reveal.js@4.5.0/plugin/highlight/highlight.js"></script>
+    <script src="https://unpkg.com/reveal.js@4.5.0/plugin/notes/notes.js"></script>
+
+    <script>
+      const deck = new Reveal({
+        hash: true,
+        slideNumber: true,
+        width: 1920,
+        height: 1080,
+        margin: 0.03,
+        minScale: 0.2,
+        maxScale: 1.5,
+        transition: "fade",
+        transitionSpeed: "fast",
+        backgroundTransition: "fade",
+        plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
+        highlight: { highlightOnLoad: true }
+      })
+      deck.initialize()
+
+      // Auto-scroll highlighted code into view
+      function scrollCodeHighlightsIn(section) {
+        if (!section) return
+        section.querySelectorAll("pre").forEach(pre => {
+          const targets = pre.querySelectorAll(
+            ".hljs-ln-line.hljs-ln-line--highlighted, .highlight-line, mark, .code-line--highlighted"
+          )
+          if (!targets.length) return
+          let top = Infinity
+          let bottom = -Infinity
+          targets.forEach(t => {
+            const y = t.offsetTop
+            const h =
+              t.offsetHeight ||
+              parseFloat(getComputedStyle(t).lineHeight) ||
+              24
+            top = Math.min(top, y)
+            bottom = Math.max(bottom, y + h)
+          })
+          const pad = 12
+          const viewTop = pre.scrollTop
+          const viewBottom = viewTop + pre.clientHeight
+          if (top < viewTop + pad) {
+            pre.scrollTo({ top: Math.max(0, top - pad), behavior: "smooth" })
+          } else if (bottom > viewBottom - pad) {
+            pre.scrollTo({
+              top: bottom - pre.clientHeight + pad,
+              behavior: "smooth"
+            })
+          }
+        })
+      }
+
+      deck.on("ready", e => scrollCodeHighlightsIn(e.currentSlide))
+      deck.on("slidechanged", e => scrollCodeHighlightsIn(e.currentSlide))
+      deck.on("fragmentshown", () =>
+        scrollCodeHighlightsIn(deck.getCurrentSlide())
+      )
+      deck.on("fragmenthidden", () =>
+        scrollCodeHighlightsIn(deck.getCurrentSlide())
+      )
+    </script>
+  </body>
+</html>
